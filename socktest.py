@@ -6,18 +6,18 @@ import socket
 
 # List of common ports/protocols
 portlist = {
-    7:     ['echo'],         20:    ['ftp'],        21:    ['ftp'],
-    22:     ['ssh','scp'],        23:    ['telnet'],        25:    ['smtp'],
-    53:    ['dns'],        67:    ['dhcp','bootp'],    68:    ['dhcp','bootp'],
-    80:    ['http'],        88:    ['kerberos','krb'],    110:    ['pop3'],
-    123:    ['ntp','time'],        143:    ['imap','imap4'],    389:    ['ldap'],
-    443:    ['https'],        464:    ['kerberos','krb'],    465:    ['smtps'],
-    500:    ['isakmp'],        515:    ['lpd','lpr'],        587:    ['smtps','tls'],
-    631:    ['cupsd'],        636:    ['ldaps'],        989:    ['ftps'],
-    990:    ['ftps'],        993:    ['imaps','imap4s'],    995:    ['pops','pop3s'],
-    1194:    ['ovpn','openvpn'],    1701:    ['l2tp'],        1723:    ['pptp'],
-    2049:    ['nfs'],        2483:    ['ora'],        2484:    ['ora'],
-    3389:    ['rdp','ts'],        5900:    ['vnc'],        8080:    ['http','proxy'],
+    7:     ['echo'],             20:  ['ftp'],              21:  ['ftp'],
+    22:    ['ssh','scp'],        23:  ['telnet'],           25:  ['smtp'],
+    53:    ['dns'],              67:  ['dhcp','bootp'],     68:  ['dhcp','bootp'],
+    80:    ['http'],             88:  ['kerberos','krb'],  110:  ['pop3'],
+    123:   ['ntp','time'],      143:  ['imap','imap4'],    389:  ['ldap'],
+    443:   ['https'],           464:  ['kerberos','krb'],  465:  ['smtps'],
+    500:   ['isakmp'],          515:  ['lpd','lpr'],       587:  ['smtps','tls'],
+    631:   ['cupsd'],           636:  ['ldaps'],           989:  ['ftps'],
+    990:   ['ftps'],            993:  ['imaps','imap4s'],  995:  ['pops','pop3s'],
+    1194:  ['ovpn','openvpn'], 1701:  ['l2tp'],           1723:  ['pptp'],
+    2049:  ['nfs'],            2483:  ['ora'],            2484:  ['ora'],
+    3389:  ['rdp','ts'],       5900:  ['vnc'],            8080:  ['http','proxy'],
 }
 t= []
 
