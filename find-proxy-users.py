@@ -80,7 +80,7 @@ def readMetadata(meta_file: str, maintainers: dict, add_desc: bool = False) -> N
         # address to be the proxy user
         if 'gentoo.org' not in mail:
             try:
-                desc = maintainer.find('description').text
+                desc = maintainer.find('description').text.replace('\n', ' ')
             except AttributeError:
                 desc = ''
             try:
