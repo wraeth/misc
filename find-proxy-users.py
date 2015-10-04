@@ -76,22 +76,17 @@ def readMetadata(meta_file: str, maintainers: dict, add_desc: bool = False) -> N
     for maintainer in m.findall('maintainer'):
         package = '/'.join(meta_file.split(os.sep)[3:5])
         mail = maintainer.find('email').text
-        if 'gentoo.org' in mail:
-            # a dev isn't a user maintainer
-            return
-        try:
-            desc = maintainer.find('description').text
-        except AttributeError:
-            # maintainer doesn't have a desc
-            return
-        if re.search('assign *bugs *to|proxy', desc, re.I):
-            if not add_desc:
+        # Assume the maintainer without an official '@gentoo.org' email
+        # address to be the proxy user
+        if 'gentoo.org' not in mail:
+            try:
+                desc = maintainer.find('description').text
+            except AttributeError:
                 desc = ''
             try:
                 maintainers[mail].packages.append(package)
             except KeyError:
                 maintainers[mail] = Details(desc, [package])
-
 
 if __name__ == '__main__':
     main()
