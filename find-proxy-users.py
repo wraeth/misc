@@ -264,7 +264,10 @@ def find_metadata_files(portdir: str) -> list:
     """Searches for metadata.xml files and returns list of paths."""
     assert isinstance(portdir, str)
     for root, subdirs, files in os.walk(portdir):
-        if 'metadata.xml' in files:
+        # Skip category metadata (such as sys-apps/metadata.xml)
+        if os.path.dirname(root) == portdir:
+            continue
+        if'metadata.xml' in files:
             yield os.path.join(root, 'metadata.xml')
 
 
