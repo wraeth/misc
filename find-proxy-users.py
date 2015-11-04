@@ -115,7 +115,6 @@ def main() -> int:
     parser.add_argument('-p', '--portdir', help='Portage tree root', default='/usr/portage')
     parser.add_argument('-d', '--desc', help='Include maint description', action='store_true')
     parser.add_argument('-H', '--herd', help='Limit results to packages owned by HERD')
-    parser.set_defaults(mode='none')
 
     subparsers = parser.add_subparsers(help='commands')
 
@@ -135,6 +134,11 @@ def main() -> int:
     orphan_parser.set_defaults(mode='orphans')
     
     args = parser.parse_args()
+
+    # print help if no mode is given
+    if 'mode' not in args:
+        parser.print_help()
+        return -1
 
     if args.mode == 'local':
         return list_local_packages(args)
