@@ -115,7 +115,6 @@ def main() -> int:
     parser.add_argument('-p', '--portdir', help='Portage tree root', default='/usr/portage')
     parser.add_argument('-d', '--desc', help='Include maint description', action='store_true')
     parser.add_argument('-H', '--herd', help='Limit results to packages owned by HERD')
-    parser.set_defaults(mode='none')
 
     subparsers = parser.add_subparsers(help='commands')
 
@@ -135,6 +134,11 @@ def main() -> int:
     orphan_parser.set_defaults(mode='orphans')
     
     args = parser.parse_args()
+
+    # print help if no mode is given
+    if 'mode' not in args:
+        parser.print_help()
+        return -1
 
     if args.mode == 'local':
         return list_local_packages(args)
@@ -264,7 +268,10 @@ def find_metadata_files(portdir: str) -> list:
     """Searches for metadata.xml files and returns list of paths."""
     assert isinstance(portdir, str)
     for root, subdirs, files in os.walk(portdir):
-        if 'metadata.xml' in files:
+        # Skip category metadata (such as sys-apps/metadata.xml)
+        if os.path.dirname(root) == portdir:
+            continue
+        if'metadata.xml' in files:
             yield os.path.join(root, 'metadata.xml')
 
 
