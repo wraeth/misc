@@ -5,132 +5,42 @@ Searches metadata.xml files in Gentoo Portage tree to find proxy maintainers.
 """
 
 import argparse
-import collections
 import os
 import sys
 
-unmaintained_addrs = tuple(['', 'NO MAINTAINER', 'maintainer-needed@gentoo.org'])
+import portage
+from portage.output import colorize as colorize
 
-try:
-    import xml.etree.cElementTree as ElementTree
-except ImportError:
-    import xml.etree.ElementTree as ElementTree
-
-
-class Maintainer:
-
-    """Simple class to store maintainer information."""
-
-    def __init__(self, address: str, description: str=None):
-        """Class instantiation."""
-        self.address = address
-        self.description = description
-
-    def __repr__(self):
-        """Returns address of the maintainer."""
-        return self.address
-
-    def __cmp__(self, other) -> bool:
-        """Override for self comparing."""
-        return self.address == other.address
-
-
-class Package:
-
-    """Contains information about individual packages."""
-
-    def __init__(self, metadata: str):
-        """Object instantiation."""
-        self.metadata = metadata
-        self.atom = '/'.join(self.metadata.split(os.sep)[-3:-1])
-        self.maintainers = []
-
-        meta = ElementTree.parse(self.metadata).getroot()
-        self.herds = [elem.text for elem in meta.findall('herd')]
-        for maintainer in meta.findall('maintainer'):
-            address = maintainer.find('email').text
-            try:
-                desc = maintainer.find('description').text.replace('\n', ' ')
-            except AttributeError:
-                desc = None
-            self.maintainers.append(Maintainer(address, desc))
-
-        del meta
-
-    def __repr__(self):
-        """Returns the package atom."""
-        return self.atom
-
-    def is_officially_maintained(self) -> bool:
-        """Determines if package is officially maintained and returns bool."""
-        if len(self.herds) > 1 or 'proxy-maintainers' not in self.herds:
-            return True
-        officially_maintained = True
-        for maintainer in self.maintainers:
-            if 'gentoo.org' not in maintainer.address:
-                officially_maintained = False
-        return officially_maintained
-
-    def is_orphan(self) -> bool:
-        """Determines if package is an orphan and returns bool."""
-        if self.is_officially_maintained():
-            return False
-
-        am_orphan = True
-        for maintainer in self.maintainers:
-            if 'gentoo.org' not in maintainer.address:
-                am_orphan = False
-            elif maintainer.address in unmaintained_addrs:
-                pass
-            else:
-                am_orphan = False
-
-        if len(self.herds) > 0 and 'proxy-maintainers' not in self.herds:
-            am_orphan = False
-
-        return am_orphan
-
-    def get_proxy_maintainer(self) -> Maintainer:
-        """Returns the address of the proxy maintainer of the package or None for unmaintained."""
-        user = None
-        if len(self.maintainers) == 0:
-            user = Maintainer('NO MAINTAINER')
-        for maintainer in self.maintainers:
-            if maintainer in unmaintained_addrs:
-                user = maintainer
-            if 'gentoo.org' not in maintainer.address:
-                user = maintainer
-
-        # this is for unusual circumstance, such as package belonging to proxy-maint herd
-        # but only have an @gentoo.org address assigned as maintainer
-        if user is None:
-            for maintainer in self.maintainers:
-                user = maintainer
-        return user
+projects_xml = os.path.join(portage.portdb.porttrees[0], 'metadata', 'projects.xml')  # TODO: is this valid?
+maintainer_needed_colour = 'red'
+address_colour = 'yellow'
+package_colour = 'green'
+field_colour = 'blue'
+name_colour = 'teal'
 
 
 def main() -> int:
     """Entry point."""
     parser = argparse.ArgumentParser()
-    parser.add_argument('-p', '--portdir', help='Portage tree root', default='/usr/portage')
-    parser.add_argument('-d', '--desc', help='Include maint description', action='store_true')
-    parser.add_argument('-H', '--herd', help='Limit results to packages owned by HERD')
+    parser.add_argument('-p', '--portdir', help='Portage tree root', default=portage.portdb.porttrees[0], metavar='DIR')
+    parser.add_argument('-n', '--nocolour', help='Do not colourise output', action='store_true')
 
     subparsers = parser.add_subparsers(help='commands')
 
     local_parser = subparsers.add_parser('local', help='Find locally installed proxy-maintainer packages')
     local_parser.add_argument('-i', '--input', help='Package list', type=argparse.FileType('r'), default='-')
-    local_excl = local_parser.add_mutually_exclusive_group()
-    local_excl.add_argument('-o', '--orphans', help='List orphan packages only', action='store_true')
-    local_excl.add_argument('-m', '--maintainer', help='Show package maintainer', action='store_true')
+    local_parser.add_argument('-d', '--desc', help='Include maint description', action='store_true')
+    local_parser.add_argument('-o', '--orphans', help='List orphan packages only', action='store_true')
+    local_parser.add_argument('-m', '--maintainer', help='Show package maintainer', action='store_true')
     local_parser.set_defaults(mode='local')
 
     user_parser = subparsers.add_parser('users', help='List users who proxy-maintain packages')
     user_parser.add_argument('-a', '--address', help='Only list packages for <address>')
-    user_parser.add_argument('-p', '--list-atoms', help='Print list of maintained atoms', action='store_true')
+    user_parser.add_argument('-l', '--list-atoms', help='Print list of maintained atoms', action='store_true')
     user_parser.set_defaults(mode='users')
 
     orphan_parser = subparsers.add_parser('orphans', help='List all orphaned packages')
+    orphan_parser.add_argument('-i', '--installed', help='Show installed packages only', action='store_true')
     orphan_parser.set_defaults(mode='orphans')
     
     args = parser.parse_args()
@@ -139,6 +49,11 @@ def main() -> int:
     if 'mode' not in args:
         parser.print_help()
         return -1
+
+    # overrides the colorize function with effectively a noop
+    if args.nocolour or not sys.stdout.isatty():
+        global colorize
+        colorize = nocolor
 
     if args.mode == 'local':
         return list_local_packages(args)
@@ -152,127 +67,257 @@ def main() -> int:
 
 
 def list_local_packages(args: argparse.Namespace) -> int:
-    """List proxy-maint packages installed on system as identified by input."""
+    """
+    List proxy-maint packages installed on system as identified by input.
+
+    :param args: argparse namespace
+    """
     assert isinstance(args, argparse.Namespace)
 
     # don't hang if no input file or pipe
-    if sys.stdin.isatty():
+    if args.input.isatty():
         print('ERROR: input file or pipe required for local package lists', file=sys.stderr)
         return 2
 
-    files = [os.path.join(args.portdir, line.strip(), 'metadata.xml') for line in args.input.readlines()]
-    files.sort()
-    maintainers = {}
+    atoms = [line.strip() for line in args.input.readlines()]
+    package_list = []
 
-    for metadata in files:
-        if not os.path.isfile(metadata):
-            # skip packages in overlays
-            continue
-        package = Package(metadata)
-        if package.is_officially_maintained():
-            continue
+    for atom in atoms:
+        # assure we're working with only CP not CPV
+        atom = portage.dep.dep_getkey(atom)
+        metadata = os.path.join(args.portdir, atom, 'metadata.xml')
 
-        # if we're filtering by a specific herd
-        if args.herd is not None:
-            if args.herd not in package.herds:
-                continue
-
-        # if we're only listing orphans (no maintainer at all)
         if args.orphans:
-            if package.is_orphan():
-                print(package)
-            continue
-
-        # if we're listing the proxy maintainer
-        if args.maintainer:
-            maintainer = package.get_proxy_maintainer()
-            try:
-                maintainers[maintainer.address][1].append(package)
-            except KeyError:
-                maintainers[maintainer.address] = [maintainer, [package]]
-
-        # if we're just listing the packages
+            if is_orphan(metadata):
+                package_list.append(atom)
         else:
-            print(package)
+            if is_orphan(metadata) or is_proxy_maintained(metadata):
+                package_list.append(atom)
 
-    # if we're listing by proxy maintainer, sort and print
-    if len(list(maintainers.keys())) > 0:
-        maintainer_list = list(maintainers.keys())
-        maintainer_list.sort()
-        for address in maintainer_list:
-            maintainer = maintainers[address][0]
-            print(maintainer.address, end='')
-            if args.desc:
-                print(' (%s)' % maintainer.description, end='')
+    package_list.sort()
+
+    if args.orphans:
+        print('The following packages are orphaned:')
+    else:
+        print('The following packages are either orphaned or proxy-maintained:')
+
+    for atom in package_list:
+        if args.maintainer:
+            metadata = os.path.join(args.portdir, atom, 'metadata.xml')
+            xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
             print()
-            for package in maintainers[address][1]:
-                print('   ', package)
-            print()
+            print(_p_pkg(atom))
+            if len(xml.maintainers()) == 0:
+                print('    %s' % _p_mn('No Maintainer!'))
+            else:
+                for maint in xml.maintainers():
+                    if maint.email == 'maintainer-needed@gentoo.org':
+                        print('   %s:' % _p_fld('Maintainer'), _p_mn(maint.email))
+                    else:
+                        print('   %s: %s (%s)' % (_p_fld('Maintainer'), _p_name(maint.name), _p_addr(maint.email)))
+                        if args.desc:
+                            if maint.description is not None:
+                                print('               %s' % maint.description)
+                if len(xml.herds()) != 0:
+                    for herd in xml.herds():
+                        print('         %s: %s' % (_p_fld('Herd'), herd))
+        else:
+            print(_p_pkg(atom))
 
     return 0
 
 
 def list_user_maintainers(args: argparse.Namespace) -> int:
-    """Lists all packages that have a non-developer maintainer assigned."""
+    """
+    Lists all packages that have a non-developer maintainer assigned.
+
+    :param args: argparse namespace
+    """
     assert isinstance(args, argparse.Namespace)
-
     maintainers = {}
-    for path in find_metadata_files(args.portdir):
-        package = Package(path)
-        if package.is_officially_maintained() or package.is_orphan():
-            continue
+    for atom in portage.portdb.cp_all(trees=[args.portdir]):
+        metadata = os.path.join(args.portdir, atom, 'metadata.xml')
+        if is_proxy_maintained(metadata):
+            xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
+            for maintainer in xml.maintainers():
+                email = maintainer.email
+                if 'gentoo.org' not in email:
+                    try:
+                        maintainers[email]
+                    except KeyError:
+                        maintainers[email] = [maintainer.name, []]
+                    maintainers[email][1].append(atom)
 
-        maintainer = package.get_proxy_maintainer()
-
-        # filter by single maintainer if one was given
-        if args.address:
-            if maintainer.address != args.address:
-                continue
-
+    if args.address:
+        # print only info for given address
         try:
-            maintainers[maintainer.address][1].append(package)
+            print('%s (%s)' % (_p_addr(args.address), _p_name(maintainers[args.address][0])))
+            for atom in maintainers[args.address][1]:
+                print('   ', _p_pkg(atom))
         except KeyError:
-            maintainers[maintainer.address] = [maintainer, [package]]
+            print('Error: maintainer address %r not found' % _p_addr(args.address), file=sys.stderr)
 
-    maintainer_list = list(maintainers.keys())
-    maintainer_list.sort()
-    for address in maintainer_list:
-        maintainer = maintainers[address][0]
-        print(maintainer.address, end='')
-        if args.desc:
-            print(' (%s)' % maintainer.description, end='')
-        if args.list_atoms or args.address:
-            print()
-            for package in maintainers[address][1]:
-                print('   ', package)
-            print()
-        else:
-            print('  packages: %s' % len(maintainers[address][1]))
+    else:
+        maintainer_list = list(maintainers.keys())
+        maintainer_list.sort()
+
+        for maintainer in maintainer_list:
+            email = maintainer
+            name = maintainers[maintainer][0]
+            if args.list_atoms:
+                print()
+            if name is not None:
+                print('%s <%s>' % (_p_name(name), _p_addr(email)))
+            else:
+                print(_p_addr(email))
+            if args.list_atoms:
+                for atom in maintainers[maintainer][1]:
+                    print('   ', _p_pkg(atom))
 
     return 0
 
 
 def list_orphan_packages(args: argparse.Namespace) -> int:
-    """Lists all found orphan packages."""
-    assert isinstance(args, argparse.Namespace)
+    """
+    Lists all found orphan packages.
 
-    for path in find_metadata_files(args.portdir):
-        package = Package(path)
-        if package.is_orphan() is not True:
-            continue
-        print(package)
+    :param args: argparse namespace
+    """
+    assert isinstance(args, argparse.Namespace)
+    for atom in portage.portdb.cp_all(trees=[args.portdir]):
+        metadata_path = os.path.join(args.portdir, atom, 'metadata.xml')
+        if is_orphan(metadata_path):
+            if args.installed:
+                if is_installed(atom, args.portdir):
+                    print(_p_pkg(atom))
+            else:
+                print(_p_pkg(atom))
+
     return 0
 
 
-def find_metadata_files(portdir: str) -> list:
-    """Searches for metadata.xml files and returns list of paths."""
-    assert isinstance(portdir, str)
-    for root, subdirs, files in os.walk(portdir):
-        # Skip category metadata (such as sys-apps/metadata.xml)
-        if os.path.dirname(root) == portdir:
-            continue
-        if'metadata.xml' in files:
-            yield os.path.join(root, 'metadata.xml')
+def is_orphan(metadata: str) -> bool:
+    """
+    Checks package metadata and determines if package is orphaned.
+
+    :param metadata: Path to package metadata.xml
+    :return: True if package is orphan, else False
+    """
+    assert isinstance(metadata, str)
+    xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
+    herds = xml.herds()
+    maintainers = xml.maintainers()
+
+    orphaned = False
+
+    if len(herds) == 0 or (len(herds) == 1 and herds[0][0] == 'proxy-maintainers'):
+        if len(maintainers) == 0:
+            orphaned = True
+        elif len(maintainers) == 1 and maintainers[0].email == 'maintainer-needed@gentoo.org':
+            orphaned = True
+
+    return orphaned
+
+
+def is_installed(atom: str, portdir: str=portage.portdb.porttrees[0]) -> bool:
+    """
+    Determins if package is installed by checking if directory exists in VDB.
+
+    :param atom: CP or CPV atom to check
+    :param portdir: path to portage tree root, defaults to primary tree
+    :return: True if package installed, otherwise False
+    """
+    assert isinstance(atom, str)
+
+    # make sure we're only working with a CP and not a CPV
+    atom = portage.dep.dep_getkey(atom)
+
+    for cpv in portage.portdb.cp_list(atom, mytree=[portdir]):
+        if os.path.exists(os.path.join(portage.const.VDB_PATH, cpv)):
+            return True
+
+    return False
+
+
+def is_proxy_maintained(metadata: str) -> bool:
+    """
+    Determines if a package is maintained by someone without an @gentoo.org address.
+
+    :param metadata: path to package metadata
+    :return: True if package is proxy-maintained, otherwise False
+    """
+    assert isinstance(metadata, str)
+    assert os.path.exists(metadata)
+
+    xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
+
+    if len(xml.maintainers()) > 0:
+        for maintainer in xml.maintainers():
+            if 'gentoo.org' not in maintainer.email:
+                return True
+
+    return False
+
+
+def nocolor(color: str, string: str) -> str:
+    """
+    Override function if called with --nocolour
+
+    :param color: String for colour to be used (for compat)
+    :param string: Text to (not) colourise
+    :return:
+    """
+    return string
+
+
+def _p_name(name: str) -> str:
+    """
+    Prints a name consistently.
+
+    :param name: Name to print
+    :return: string of colourised name
+    """
+    return colorize(name_colour, name)
+
+
+def _p_addr(addr: str) -> str:
+    """
+    Prints an email address consistently.
+
+    :param addr: Address to print
+    :return: colourised address
+    """
+    return colorize(address_colour, addr)
+
+
+def _p_pkg(pkg: str) -> str:
+    """
+    Prints a package name consistently.
+
+    :param pkg: Package name to print
+    :return: colourised package name
+    """
+    return colorize(package_colour, pkg)
+
+
+def _p_fld(field: str) -> str:
+    """
+    Prints a field name consistently.
+
+    :param field: Field label to print
+    :return: colourised string
+    """
+    return colorize(field_colour, field)
+
+
+def _p_mn(txt: str) -> str:
+    """
+    Prints maintainer-needed text consistently.
+
+    :param txt: Text to print (addr or "Maintainer Needed" etc)
+    :return: colourised text
+    """
+    return colorize(maintainer_needed_colour, txt)
 
 
 if __name__ == '__main__':
