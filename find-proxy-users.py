@@ -35,11 +35,13 @@ def main() -> int:
     local_parser.set_defaults(mode='local')
 
     user_parser = subparsers.add_parser('users', help='List users who proxy-maintain packages')
-    user_parser.add_argument('-a', '--address', help='Only list packages for <address>')
+    user_parser.add_argument('-a', '--address', help='Only list packages for ADDRESS')
+    user_parser.add_argument('-C', '--category', help='Limit results to CATEGORY')
     user_parser.add_argument('-l', '--list-atoms', help='Print list of maintained atoms', action='store_true')
     user_parser.set_defaults(mode='users')
 
     orphan_parser = subparsers.add_parser('orphans', help='List all orphaned packages')
+    orphan_parser.add_argument('-C', '--category', help='Limit results to CATEGORY')
     orphan_parser.add_argument('-i', '--installed', help='Show installed packages only', action='store_true')
     orphan_parser.set_defaults(mode='orphans')
     
@@ -54,6 +56,11 @@ def main() -> int:
     if args.nocolour or not sys.stdout.isatty():
         global colorize
         colorize = nocolor
+
+    if args.category:
+        if not portage.portdb.categories.__contains__(args.category):
+            print('Error: invalid category specified: %r' % args.category, file=sys.stderr)
+            return -3
 
     if args.mode == 'local':
         return list_local_packages(args)
@@ -136,6 +143,8 @@ def list_user_maintainers(args: argparse.Namespace) -> int:
     assert isinstance(args, argparse.Namespace)
     maintainers = {}
     for atom in portage.portdb.cp_all(trees=[args.portdir]):
+        if args.category and not is_in_category(atom, args.category):
+            continue
         metadata = os.path.join(args.portdir, atom, 'metadata.xml')
         if is_proxy_maintained(metadata):
             xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
@@ -185,6 +194,8 @@ def list_orphan_packages(args: argparse.Namespace) -> int:
     """
     assert isinstance(args, argparse.Namespace)
     for atom in portage.portdb.cp_all(trees=[args.portdir]):
+        if args.category and not is_in_category(atom, args.category):
+            continue
         metadata_path = os.path.join(args.portdir, atom, 'metadata.xml')
         if is_orphan(metadata_path):
             if args.installed:
@@ -257,6 +268,18 @@ def is_proxy_maintained(metadata: str) -> bool:
                 return True
 
     return False
+
+
+def is_in_category(atom: str, category: str) -> bool:
+    """
+    Determines if the given atom is within the specified category.
+
+    :param atom: package atom to check
+    :param category: category to compare
+    :return: True if atom is in category, otherwise False
+    """
+    p_cat, p_name = portage.dep.catsplit(atom)
+    return p_cat == category
 
 
 def nocolor(color: str, string: str) -> str:
