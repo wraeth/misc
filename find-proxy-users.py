@@ -27,7 +27,7 @@ def main() -> int:
 
     subparsers = parser.add_subparsers(help='commands')
 
-    local_parser = subparsers.add_parser('local', help='Find locally installed proxy-maintainer packages')
+    local_parser = subparsers.add_parser('query', help='Query packages from input file or STDIN')
     local_parser.add_argument('-i', '--input', help='Package list', type=argparse.FileType('r'), default='-')
     local_parser.add_argument('-d', '--desc', help='Include maint description', action='store_true')
     local_parser.add_argument('-o', '--orphans', help='List orphan packages only', action='store_true')
