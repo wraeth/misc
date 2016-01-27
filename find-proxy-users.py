@@ -57,10 +57,13 @@ def main() -> int:
         global colorize
         colorize = nocolor
 
-    if args.category:
-        if not portage.portdb.categories.__contains__(args.category):
-            print('Error: invalid category specified: %r' % args.category, file=sys.stderr)
-            return -3
+    try:
+        if args.category:
+            if not portage.portdb.categories.__contains__(args.category):
+                print('Error: invalid category specified: %r' % args.category, file=sys.stderr)
+                return -3
+    except AttributeError:
+        args.category = None
 
     if args.mode == 'local':
         return list_local_packages(args)
