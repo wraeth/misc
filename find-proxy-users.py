@@ -91,11 +91,16 @@ def list_local_packages(args: argparse.Namespace) -> int:
 
     atoms = [line.strip() for line in args.input.readlines()]
     package_list = []
+    available_atoms = portage.portdb.cp_all(trees=[args.portdir])
 
     for atom in atoms:
         # assure we're working with only CP not CPV
         atom = portage.dep.dep_getkey(atom)
         metadata = os.path.join(args.portdir, atom, 'metadata.xml')
+
+        # check if the atom is in the PORTDIR we're using
+        if atom not in available_atoms:
+            continue
 
         if args.orphans:
             if is_orphan(metadata):
