@@ -103,11 +103,13 @@ def list_local_packages(args: argparse.Namespace) -> int:
             continue
 
         if args.orphans:
-            if is_orphan(metadata):
-                package_list.append(atom)
+            if atom not in package_list:
+                if is_orphan(metadata):
+                    package_list.append(atom)
         else:
-            if is_orphan(metadata) or is_proxy_maintained(metadata):
-                package_list.append(atom)
+            if atom not in package_list:
+                if is_orphan(metadata) or is_proxy_maintained(metadata):
+                    package_list.append(atom)
 
     package_list.sort()
 
