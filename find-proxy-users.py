@@ -129,7 +129,12 @@ def list_local_packages(args: argparse.Namespace) -> int:
                     if maint.email == 'maintainer-needed@gentoo.org':
                         print('   %s:' % _p_fld('Maintainer'), _p_mn(maint.email))
                     else:
-                        print('   %s: %s (%s)' % (_p_fld('Maintainer'), _p_name(maint.name), _p_addr(maint.email)))
+                        output = '   %s:' % _p_fld('Maintainer')
+                        if maint.name is not None:
+                            output += ' %s' % _p_name(maint.name)
+                        if maint.email is not None:
+                            output += ' (%s)' % _p_addr(maint.email)
+                        print(output)
                         if args.desc:
                             if maint.description is not None:
                                 print('               %s' % maint.description)
