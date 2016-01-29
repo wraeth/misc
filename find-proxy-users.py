@@ -96,10 +96,14 @@ def list_local_packages(args: argparse.Namespace) -> int:
     for atom in atoms:
         # assure we're working with only CP not CPV
         atom = portage.dep.dep_getkey(atom)
-        metadata = os.path.join(args.portdir, atom, 'metadata.xml')
 
         # check if the atom is in the PORTDIR we're using
         if atom not in available_atoms:
+            continue
+
+        metadata = os.path.join(args.portdir, atom, 'metadata.xml')
+        if not os.path.exists(metadata):
+            print('Error: no metadata.xml found for atom: %r' % atom, file=sys.stderr)
             continue
 
         if args.orphans:
@@ -121,6 +125,10 @@ def list_local_packages(args: argparse.Namespace) -> int:
     for atom in package_list:
         if args.maintainer:
             metadata = os.path.join(args.portdir, atom, 'metadata.xml')
+            if not os.path.exists(metadata):
+                print('Error: no metadata.xml found for atom: %r' % atom, file=sys.stderr)
+                continue
+
             xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
             print()
             print(_p_pkg(atom))
@@ -160,7 +168,12 @@ def list_user_maintainers(args: argparse.Namespace) -> int:
     for atom in portage.portdb.cp_all(trees=[args.portdir]):
         if args.category and not is_in_category(atom, args.category):
             continue
+
         metadata = os.path.join(args.portdir, atom, 'metadata.xml')
+        if not os.path.exists(metadata):
+            print('Error: no metadata.xml found for atom: %r' % atom, file=sys.stderr)
+            continue
+
         if is_proxy_maintained(metadata):
             xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
             for maintainer in xml.maintainers():
@@ -211,7 +224,12 @@ def list_orphan_packages(args: argparse.Namespace) -> int:
     for atom in portage.portdb.cp_all(trees=[args.portdir]):
         if args.category and not is_in_category(atom, args.category):
             continue
+
         metadata_path = os.path.join(args.portdir, atom, 'metadata.xml')
+        if not os.path.exists(metadata_path):
+            print('Error: no metadata.xml found for atom: %r' % atom, file=sys.stderr)
+            continue
+
         if is_orphan(metadata_path):
             if args.installed:
                 if is_installed(atom, args.portdir):
@@ -297,6 +315,7 @@ def is_in_category(atom: str, category: str) -> bool:
     return p_cat == category
 
 
+# noinspection PyUnusedLocal
 def nocolor(color: str, string: str) -> str:
     """
     Override function if called with --nocolour
