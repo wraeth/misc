@@ -24,28 +24,33 @@ file_colour = 'teal'
 def main() -> int:
     """Entry point for CLI usage."""
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', '--verbose', help='Print extra information', action='store_true')
     parser.add_argument('-d', '--debug', help='Print line matches for debug', action='store_true')
     parser.add_argument('-q', '--quiet', help='Print no output (overrides verbose)', action='store_false')
     parser.add_argument('-n', '--nocolour', help='Do not colourise output', action='store_true')
+    parser.add_argument('-p', '--path', help='Path to ebuild directory', default=os.path.abspath(os.curdir))
     args = parser.parse_args()
 
     if args.nocolour:
         global colorize
         colorize = nocolor
 
-    return check_files(args.verbose, args.debug, args.quiet)
+    return check_files(args.path, args.debug, args.quiet)
 
 
-def check_files(verbose: bool = False, debug: bool = False, show_output: bool = True) -> int:
+def check_files(directory: str, debug: bool = False, show_output: bool = True) -> int:
     """
     Checks files in $(pwd)/files for required files.
 
-    :param verbose: print extra output
+    :param directory: path to ebuild directory
+    :param debug: output match string for debugging
+    :param show_output: enable/disable printing output
     :return: number of missing required files
     """
-    assert isinstance(verbose, bool)
-    ebuilds = [f for f in os.listdir('.') if f.endswith('.ebuild')]
+    assert isinstance(directory, str)
+    assert isinstance(debug, bool)
+    assert isinstance(show_output, bool)
+
+    ebuilds = [f for f in os.listdir(directory) if f.endswith('.ebuild')]
 
     if len(ebuilds) == 0:
         print(_p_error('Error:'), 'not an ebuild directory', file=sys.stderr)
@@ -60,16 +65,17 @@ def check_files(verbose: bool = False, debug: bool = False, show_output: bool = 
         PN = re.sub('-\d.*', '', P)
         PV = re.search('-\d.*', P).group(0)[1:]
 
-        for line in open(ebuild, 'r').readlines():
+        for line in open(os.path.join(directory, ebuild), 'r').readlines():
             if 'FILESDIR' in line:
-                if debug:
-                    print('debug:', line.strip())
-
+                org_line = line.strip()
                 line = line.replace('${FILESDIR}', 'files')
                 line = line.replace('${P}', P)
                 line = line.replace('${PN}', PN)
                 line = line.replace('${PV}', PV)
                 line = line.replace('"', '')
+
+                if debug:
+                    print('%r -> %r' % (org_line, line.strip()))
 
                 try:
                     required_file = re.search('files\S+', line).group(0)
@@ -78,46 +84,55 @@ def check_files(verbose: bool = False, debug: bool = False, show_output: bool = 
                     continue
 
                 try:
-                    files[required_file]
+                    files[P]
                 except KeyError:
-                    files[required_file] = []
-                files[required_file].append(P)
+                    files[P] = []
+                files[P].append(required_file)
 
     file_list = list(files.keys())
     file_list.sort()
 
+    files_dir_path = os.path.join(directory, 'files')
+
     if len(file_list) > 0:
-        if not os.path.isdir('files'):
+        if not os.path.isdir(files_dir_path):
             if show_output:
                 print(_p_error('Error:'), 'FILESDIR does not exist - %d files missing!' % len(file_list))
         else:
-            for f in file_list:
-                if not os.path.isfile(f):
-                    if show_output:
-                        print(_p_file(f), _p_warn('not found'))
-                    missing_files += 1
-                else:
-                    if show_output:
-                        print(_p_file(f), _p_good('found'))
+            for pkg in file_list:
                 if show_output:
-                    if verbose:
-                        print('Required by:')
-                        [print('   ', _p_pkg(cpv)) for cpv in files[f]]
-                        print()
+                    print(_p_pkg(pkg))
 
-    if os.path.isdir('files'):
+                for f in files[pkg]:
+                    if not os.path.isfile(os.path.join(directory, f)):
+                        if debug:
+                            print('PATH NOT FOUND: %r' % os.path.join(directory, 'files', f))
+                        if show_output:
+                            print(' ', _p_warn('missing:'), _p_file(os.path.basename(f)))
+                        missing_files += 1
+                    else:
+                        if show_output:
+                            print(' ', _p_good('  found:'), _p_file(os.path.basename(f)))
+
+    required_files = [v for l in files.values() for v in l]
+    if debug:
+        print(required_files)
+
+    if os.path.isdir(files_dir_path):
         not_required = []
-        files_dir = [f for f in os.listdir('files')]
+        files_dir = [f for f in os.listdir(files_dir_path)]
         for f in files_dir:
             path = os.path.join('files', f)
-            if path not in files.keys():
+            if path not in required_files:
+                if debug:
+                    print('PATH NOT REQUIRED: %r' % path)
                 not_required.append(path)
 
         if show_output:
             if len(not_required) > 0:
                 print()
                 print('The following files are no longer required:')
-                [print('   ', _p_file(f)) for f in not_required]
+                [print('   ', _p_file(os.path.basename(f))) for f in not_required]
 
     return missing_files
 
