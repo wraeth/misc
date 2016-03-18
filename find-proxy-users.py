@@ -32,6 +32,7 @@ def main() -> int:
     local_parser.add_argument('-d', '--desc', help='Include maint description', action='store_true')
     local_parser.add_argument('-o', '--orphans', help='List orphan packages only', action='store_true')
     local_parser.add_argument('-m', '--maintainer', help='Show package maintainer', action='store_true')
+    local_parser.add_argument('-a', '--address', help='Only packages associated with address')
     local_parser.set_defaults(mode='local')
 
     user_parser = subparsers.add_parser('users', help='List users who proxy-maintain packages')
@@ -106,6 +107,18 @@ def list_local_packages(args: argparse.Namespace) -> int:
             print('Error: no metadata.xml found for atom: %r' % atom, file=sys.stderr)
             continue
 
+        if args.address:
+            xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
+            matches_address = False
+            for maintainer in xml.maintainers():
+                if maintainer.email == args.address:
+                    matches_address = True
+            if not matches_address:
+                # package not associated with specified address
+                continue
+            del xml
+            del matches_address
+
         if args.orphans:
             if atom not in package_list:
                 if is_orphan(metadata):
@@ -119,6 +132,8 @@ def list_local_packages(args: argparse.Namespace) -> int:
 
     if args.orphans:
         print('The following packages are orphaned:')
+    elif args.address:
+        print('The following packages are associated with the address %r' % args.address)
     else:
         print('The following packages are either orphaned or proxy-maintained:')
 
