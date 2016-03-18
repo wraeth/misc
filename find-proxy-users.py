@@ -189,7 +189,17 @@ def list_user_maintainers(args: argparse.Namespace) -> int:
             print('Error: no metadata.xml found for atom: %r' % atom, file=sys.stderr)
             continue
 
-        if is_proxy_maintained(metadata):
+        if args.address:
+            # allow searching for any address
+            xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
+            for maintainer in xml.maintainers():
+                if maintainer.email == args.address:
+                    try:
+                        maintainers[args.address]
+                    except KeyError:
+                        maintainers[args.address] = [maintainer.name, []]
+                    maintainers[args.address][1].append(atom)
+        elif is_proxy_maintained(metadata):
             xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
             for maintainer in xml.maintainers():
                 email = maintainer.email
@@ -207,7 +217,7 @@ def list_user_maintainers(args: argparse.Namespace) -> int:
             for atom in maintainers[args.address][1]:
                 print('   ', _p_pkg(atom))
         except KeyError:
-            print('Error: maintainer address %r not found' % _p_addr(args.address), file=sys.stderr)
+            print('Error: maintainer address %r not found' % args.address, file=sys.stderr)
 
     else:
         maintainer_list = list(maintainers.keys())
