@@ -101,6 +101,9 @@ def check_files(directory: str, debug: bool = False, show_output: bool = True) -
         if not os.path.isdir(files_dir_path):
             if show_output:
                 print(_p_error('Error:'), 'FILESDIR does not exist - %d files missing!' % len(file_list))
+                
+                # All patch files are missing
+                [missing_files += len(v) for l in files.values() for v in l]
         else:
             for pkg in file_list:
                 if show_output:
