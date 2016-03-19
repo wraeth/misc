@@ -34,7 +34,11 @@ def main() -> int:
         global colorize
         colorize = nocolor
 
-    return check_files(args.path, args.debug, args.quiet)
+    try:
+        return check_files(args.path, args.debug, args.quiet)
+    except RuntimeError as err:
+        print(_p_error('Error:'), str(err))
+        return -1
 
 
 def check_files(directory: str, debug: bool = False, show_output: bool = True) -> int:
@@ -53,8 +57,7 @@ def check_files(directory: str, debug: bool = False, show_output: bool = True) -
     ebuilds = [f for f in os.listdir(directory) if f.endswith('.ebuild')]
 
     if len(ebuilds) == 0:
-        print(_p_error('Error:'), 'not an ebuild directory', file=sys.stderr)
-        return 0
+        raise RuntimeError('Not a valid ebuild directory: %r' % directory)
 
     files = {}
     missing_files = 0
