@@ -74,6 +74,11 @@ def check_files(directory: str, debug: bool = False) -> int:
         for line in open(os.path.join(directory, ebuild), 'r').readlines():
             if 'FILESDIR' in line:
                 org_line = line.strip()
+
+                # Ignore comment lines
+                if re.match('\s*#', line):
+                    continue
+
                 line = line.replace('${FILESDIR}', 'files')
                 line = line.replace('${P}', P)
                 line = line.replace('${PN}', PN)
