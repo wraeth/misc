@@ -20,6 +20,8 @@ good_colour = 'green'
 cpv_colour = 'blue'
 file_colour = 'teal'
 
+show_output = True
+
 
 def main() -> int:
     """Entry point for CLI usage."""
@@ -34,25 +36,26 @@ def main() -> int:
         global colorize
         colorize = nocolor
 
+    global show_output
+    show_output = args.quiet
+
     try:
-        return check_files(args.path, args.debug, args.quiet)
+        return check_files(args.path, args.debug)
     except RuntimeError as err:
-        print(_p_error('Error:'), str(err))
+        print_err(str(err))
         return -1
 
 
-def check_files(directory: str, debug: bool = False, show_output: bool = True) -> int:
+def check_files(directory: str, debug: bool = False) -> int:
     """
     Checks files in $(pwd)/files for required files.
 
     :param directory: path to ebuild directory
     :param debug: output match string for debugging
-    :param show_output: enable/disable printing output
     :return: number of missing required files
     """
     assert isinstance(directory, str)
     assert isinstance(debug, bool)
-    assert isinstance(show_output, bool)
 
     ebuilds = [f for f in os.listdir(directory) if f.endswith('.ebuild')]
 
@@ -99,26 +102,25 @@ def check_files(directory: str, debug: bool = False, show_output: bool = True) -
 
     if len(file_list) > 0:
         if not os.path.isdir(files_dir_path):
-            if show_output:
-                print(_p_error('Error:'), 'FILESDIR does not exist - %d files missing!' % len(file_list))
-                
-                # All patch files are missing
-                [missing_files += len(v) for l in files.values() for v in l]
+            print_out(_p_error('Error:'), 'FILESDIR does not exist - %d files missing!' % len(file_list))
+
+            # All patch files are missing
+            for l in files.values():
+                for v in l:
+                    missing_files += len(v)
+
         else:
             for pkg in file_list:
-                if show_output:
-                    print(_p_pkg(pkg))
+                print_out(_p_pkg(pkg))
 
                 for f in files[pkg]:
                     if not os.path.isfile(os.path.join(directory, f)):
                         if debug:
                             print('PATH NOT FOUND: %r' % os.path.join(directory, 'files', f))
-                        if show_output:
-                            print(' ', _p_warn('missing:'), _p_file(os.path.basename(f)))
+                        print_out(' ', _p_warn('missing:'), _p_file(os.path.basename(f)))
                         missing_files += 1
                     else:
-                        if show_output:
-                            print(' ', _p_good('  found:'), _p_file(os.path.basename(f)))
+                        print_out(' ', _p_good('  found:'), _p_file(os.path.basename(f)))
 
     required_files = [v for l in files.values() for v in l]
     if debug:
@@ -134,13 +136,36 @@ def check_files(directory: str, debug: bool = False, show_output: bool = True) -
                     print('PATH NOT REQUIRED: %r' % path)
                 not_required.append(path)
 
-        if show_output:
-            if len(not_required) > 0:
-                print()
-                print('The following files are no longer required:')
-                [print('   ', _p_file(os.path.basename(f))) for f in not_required]
+        if len(not_required) > 0:
+            print_out('')
+            print_out('The following files are no longer required:')
+            [print_out('   ', _p_file(os.path.basename(f))) for f in not_required]
 
     return missing_files
+
+
+def print_out(*message: list) -> None:
+    """
+    Wrapper for conditionally printing messages.
+
+    :param message: message to print
+    :return: None
+    """
+    global show_output
+    if show_output:
+        print(' '.join(message))
+    return
+
+
+def print_err(*message: list) -> None:
+    """
+    Simple wrapper for printing an error message.
+
+    :param message: error message to print.
+    :return: None
+    """
+    print(_p_error('Error:'), ' '.join(message), file=sys.stderr)
+    return
 
 
 # noinspection PyUnusedLocal
