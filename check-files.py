@@ -21,6 +21,7 @@ cpv_colour = 'blue'
 file_colour = 'teal'
 
 show_output = True
+debug = False
 
 
 def main() -> int:
@@ -37,16 +38,18 @@ def main() -> int:
         colorize = nocolor
 
     global show_output
+    global debug
     show_output = args.quiet
+    debug = args.debug
 
     try:
-        return check_files(args.path, args.debug)
+        return check_files(args.path)
     except RuntimeError as err:
         print_err(str(err))
         return -1
 
 
-def check_files(directory: str, debug: bool = False) -> int:
+def check_files(directory: str) -> int:
     """
     Checks files in $(pwd)/files for required files.
 
@@ -80,13 +83,12 @@ def check_files(directory: str, debug: bool = False) -> int:
                 line = line.replace('${PV}', PV)
                 line = line.replace('"', '')
 
-                if debug:
-                    print('%r -> %r' % (org_line, line.strip()))
+                print_dbg('%r -> %r' % (org_line, line.strip()))
 
                 try:
                     required_file = re.search('files\S+', line).group(0)
                 except AttributeError:
-                    print('Error getting path from string: %r' % line.strip(), file=sys.stderr)
+                    print_err('Unable to get path from string: %r' % line.strip())
                     continue
 
                 try:
@@ -102,7 +104,7 @@ def check_files(directory: str, debug: bool = False) -> int:
 
     if len(file_list) > 0:
         if not os.path.isdir(files_dir_path):
-            print_out(_p_error('Error:'), 'FILESDIR does not exist - %d files missing!' % len(file_list))
+            print_err('FILESDIR does not exist - %d files missing!' % len(file_list))
 
             # All patch files are missing
             for l in files.values():
@@ -115,16 +117,14 @@ def check_files(directory: str, debug: bool = False) -> int:
 
                 for f in files[pkg]:
                     if not os.path.isfile(os.path.join(directory, f)):
-                        if debug:
-                            print('PATH NOT FOUND: %r' % os.path.join(directory, 'files', f))
+                        print_dbg('PATH NOT FOUND: %r' % os.path.join(directory, 'files', f))
                         print_out(' ', _p_warn('missing:'), _p_file(os.path.basename(f)))
                         missing_files += 1
                     else:
                         print_out(' ', _p_good('  found:'), _p_file(os.path.basename(f)))
 
     required_files = [v for l in files.values() for v in l]
-    if debug:
-        print(required_files)
+    print_dbg(required_files)
 
     if os.path.isdir(files_dir_path):
         not_required = []
@@ -132,8 +132,7 @@ def check_files(directory: str, debug: bool = False) -> int:
         for f in files_dir:
             path = os.path.join('files', f)
             if path not in required_files:
-                if debug:
-                    print('PATH NOT REQUIRED: %r' % path)
+                print_dbg('PATH NOT REQUIRED: %r' % path)
                 not_required.append(path)
 
         if len(not_required) > 0:
@@ -165,6 +164,19 @@ def print_err(*message: list) -> None:
     :return: None
     """
     print(_p_error('Error:'), ' '.join(message), file=sys.stderr)
+    return
+
+
+def print_dbg(*message: list) -> None:
+    """
+    Simple wrapper for printing debug output.
+
+    :param message: error message to print.
+    :return: None
+    """
+    global debug
+    if debug:
+        print(_p_error('DEBUG: '), ' '.join(message), file=sys.stderr)
     return
 
 
