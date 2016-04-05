@@ -6,6 +6,7 @@ Searches metadata.xml files in Gentoo Portage tree to find proxy maintainers.
 
 import argparse
 import os
+import subprocess
 import sys
 
 import portage
@@ -45,6 +46,12 @@ def main() -> int:
     orphan_parser.add_argument('-C', '--category', help='Limit results to CATEGORY')
     orphan_parser.add_argument('-i', '--installed', help='Show installed packages only', action='store_true')
     orphan_parser.set_defaults(mode='orphans')
+
+    xml_parser = subparsers.add_parser('xml', help='List users who proxy-maintain packages in XML-style')
+    xml_parser.add_argument('-a', '--address', help='Only list packages for ADDRESS')
+    xml_parser.add_argument('-C', '--category', help='Limit results to CATEGORY')
+    xml_parser.add_argument('-c', '--commits', help='Include last known commit', action='store_true')
+    xml_parser.set_defaults(mode='xml')
     
     args = parser.parse_args()
 
@@ -72,6 +79,8 @@ def main() -> int:
         return list_user_maintainers(args)
     elif args.mode == 'orphans':
         return list_orphan_packages(args)
+    elif args.mode == 'xml':
+        return print_xml(args)
     else:
         parser.print_help()
         return -1
@@ -170,6 +179,110 @@ def list_local_packages(args: argparse.Namespace) -> int:
             print(_p_pkg(atom))
 
     return 0
+
+
+def print_xml(args: argparse.Namespace) -> int:
+    """
+    Prints proxy maintainers in a nice XML format.
+
+    :param args: argparse namespace
+    """
+    assert isinstance(args, argparse.Namespace)
+
+    git_dir = os.path.join(args.portdir, '.git')
+    if not os.path.isdir(git_dir):
+        print('This functionality only works if --portdir is a git repository.', file=sys.stderr)
+        return 1
+
+    maintainers = {}
+    for atom in portage.portdb.cp_all(trees=[args.portdir]):
+        if args.category and not is_in_category(atom, args.category):
+            continue
+
+        metadata = os.path.join(args.portdir, atom, 'metadata.xml')
+        if not os.path.exists(metadata):
+            print('Error: no metadata.xml found for atom: %r' % atom, file=sys.stderr)
+            continue
+
+        if args.address:
+            # allow searching for any address
+            xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
+            for maintainer in xml.maintainers():
+                if maintainer.email == args.address:
+                    try:
+                        maintainers[args.address]
+                    except KeyError:
+                        maintainers[args.address] = [maintainer.name, []]
+                    maintainers[args.address][1].append(atom)
+        elif is_proxy_maintained(metadata):
+            xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
+            for maintainer in xml.maintainers():
+                email = maintainer.email
+                if 'gentoo.org' not in email:
+                    try:
+                        maintainers[email]
+                    except KeyError:
+                        maintainers[email] = [maintainer.name, []]
+                    maintainers[email][1].append(atom)
+
+    maintainer_list = list(maintainers.keys())
+    maintainer_list.sort()
+
+    print('<maintainers>')
+
+    for maintainer in maintainer_list:
+        print('  <maintainer>')
+        email = maintainer
+        name = maintainers[maintainer][0]
+        print('    <email>%s</email>' % email)
+        if name is not None:
+            print('    <name>%s</name>' % name)
+        print('    <packages>')
+        for atom in maintainers[maintainer][1]:
+            if args.commits:
+                commit = get_last_commit(atom, args.portdir)
+                print('      <package name="%s">' % atom)
+                print('        <lastCommitDate>%s</lastCommitDate>' % commit[0])
+                print('        <lastCommitAuthor>%s</lastCommitAuthor>' % commit[1])
+                print('        <lastCommitTitle>%s</lastCommitTitle>' % commit[2])
+                print('        <lastCommitId>%s</lastCommitId>' % commit[3])
+                print('      </package>')
+            else:
+                print('      <package name="%s" />' % atom)
+        print('    </packages>')
+        print('  </maintainer>')
+    print('</maintainers>')
+    return 0
+
+
+def get_last_commit(atom: str, repo: str) -> tuple:
+    """
+    Looks at git log to find last commit for atom.
+
+    :param atom: the package atom (CP) to look up.
+    :param repo: path to repository
+    :returns: tuple of (commit-date, commit-author, commit-subj, commit-id)
+    """
+    assert isinstance(atom, str)
+    assert isinstance(repo, str)
+
+    curdir = os.curdir
+    os.chdir(repo)
+
+    log = subprocess.check_output(['git', 'log', '-n1', '--format=fuller', atom]).decode()
+    log = log.splitlines()
+
+    commit_id = log[0][7:]
+    author = log[1][12:]
+    auth_date = log[2][12:]
+    title = log[6].strip()
+
+    # replace '<' and '>' in author
+    author = author.replace('<', '[').replace('>', ']')
+
+    os.chdir(curdir)
+
+    return tuple([auth_date, author, title, commit_id])
 
 
 def list_user_maintainers(args: argparse.Namespace) -> int:
