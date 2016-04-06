@@ -80,7 +80,7 @@ def main() -> int:
     if args.mode == 'local':
         return list_local_packages(args.input, args.portdir, args.address, args.orphans, args.maintainer, args.desc)
     elif args.mode == 'users':
-        return list_user_maintainers(args)
+        return list_user_maintainers(args.portdir, args.category, args.address, args.list_atoms)
     elif args.mode == 'orphans':
         return list_orphan_packages(args)
     elif args.mode == 'xml':
@@ -291,24 +291,39 @@ def get_last_commit(atom: str, repo: str) -> tuple:
     return tuple([auth_date, author, title, commit_id])
 
 
-def list_user_maintainers(args: argparse.Namespace) -> int:
+def list_user_maintainers(portdir: str, category: str, address: str, list_atoms: bool) -> int:
     """
     Lists all packages that have a non-developer maintainer assigned.
 
-    :param args: argparse namespace
+    :param portdir: path to portage repository for metadata
+    :type portdir: str
+    :param category: category to restrict search to
+    :type category: str
+    :param address: specific address to search for
+    :type address: str
+    :param list_atoms: whether to list individual atoms maintained by maintainer
+    :type list_atoms: bool
+    :returns: exit code
+    :rtype: int
     """
-    assert isinstance(args, argparse.Namespace)
+    assert isinstance(portdir, str)
+    assert isinstance(list_atoms, bool)
 
-    maintainers = get_maintainers(args)
+    if category is not None:
+        assert isinstance(category, str)
+    if address is not None:
+        assert isinstance(address, str)
 
-    if args.address:
+    maintainers = get_maintainers(portdir, category, address)
+
+    if address:
         # print only info for given address
         try:
-            print('%s (%s)' % (_p_addr(args.address), _p_name(maintainers[args.address][0])))
-            for atom in maintainers[args.address][1]:
+            print('%s (%s)' % (_p_addr(address), _p_name(maintainers[address][0])))
+            for atom in maintainers[address][1]:
                 print('   ', _p_pkg(atom))
         except KeyError:
-            print('Error: maintainer address %r not found' % args.address, file=sys.stderr)
+            print('Error: maintainer address %r not found' % address, file=sys.stderr)
 
     else:
         maintainer_list = list(maintainers.keys())
@@ -317,13 +332,13 @@ def list_user_maintainers(args: argparse.Namespace) -> int:
         for maintainer in maintainer_list:
             email = maintainer
             name = maintainers[maintainer][0]
-            if args.list_atoms:
+            if list_atoms:
                 print()
             if name is not None:
                 print('%s <%s>' % (_p_name(name), _p_addr(email)))
             else:
                 print(_p_addr(email))
-            if args.list_atoms:
+            if list_atoms:
                 for atom in maintainers[maintainer][1]:
                     print('   ', _p_pkg(atom))
 
