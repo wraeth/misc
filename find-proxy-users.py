@@ -196,6 +196,7 @@ def print_xml(args: argparse.Namespace) -> int:
 
     maintainers = get_maintainers(args)
     maintainer_list = list(maintainers.keys())
+    maintainer_list.sort()
 
     print('<maintainers>')
 
