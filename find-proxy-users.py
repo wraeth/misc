@@ -261,36 +261,6 @@ def print_xml(portdir: str, commits: bool, category: str, address: str) -> int:
     return 0
 
 
-def get_last_commit(atom: str, repo: str) -> tuple:
-    """
-    Looks at git log to find last commit for atom.
-
-    :param atom: the package atom (CP) to look up.
-    :param repo: path to repository
-    :returns: tuple of (commit-date, commit-author, commit-subj, commit-id)
-    """
-    assert isinstance(atom, str)
-    assert isinstance(repo, str)
-
-    curdir = os.curdir
-    os.chdir(repo)
-
-    log = subprocess.check_output(['git', 'log', '-n1', '--format=fuller', atom]).decode()
-    log = log.splitlines()
-
-    commit_id = log[0][7:]
-    author = log[1][12:]
-    auth_date = log[2][12:]
-    title = log[6].strip()
-
-    # replace '<' and '>' in author
-    author = author.replace('<', '[').replace('>', ']')
-
-    os.chdir(curdir)
-
-    return tuple([auth_date, author, title, commit_id])
-
-
 def list_user_maintainers(portdir: str, category: str, address: str, list_atoms: bool) -> int:
     """
     Lists all packages that have a non-developer maintainer assigned.
@@ -381,6 +351,36 @@ def list_orphan_packages(portdir: str, category: str, installed: bool) -> int:
                 print(_p_pkg(atom))
 
     return 0
+
+
+def get_last_commit(atom: str, repo: str) -> tuple:
+    """
+    Looks at git log to find last commit for atom.
+
+    :param atom: the package atom (CP) to look up.
+    :param repo: path to repository
+    :returns: tuple of (commit-date, commit-author, commit-subj, commit-id)
+    """
+    assert isinstance(atom, str)
+    assert isinstance(repo, str)
+
+    curdir = os.curdir
+    os.chdir(repo)
+
+    log = subprocess.check_output(['git', 'log', '-n1', '--format=fuller', atom]).decode()
+    log = log.splitlines()
+
+    commit_id = log[0][7:]
+    author = log[1][12:]
+    auth_date = log[2][12:]
+    title = log[6].strip()
+
+    # replace '<' and '>' in author
+    author = author.replace('<', '[').replace('>', ']')
+
+    os.chdir(curdir)
+
+    return tuple([auth_date, author, title, commit_id])
 
 
 def get_maintainers(portdir: str, category: str, address: str) -> dict:
