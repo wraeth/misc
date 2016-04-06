@@ -82,7 +82,7 @@ def main() -> int:
     elif args.mode == 'users':
         return list_user_maintainers(args.portdir, args.category, args.address, args.list_atoms)
     elif args.mode == 'orphans':
-        return list_orphan_packages(args)
+        return list_orphan_packages(args.portdir, args.category, args.installed)
     elif args.mode == 'xml':
         return print_xml(args.portdir, args.commits, args.category, args.address)
     else:
@@ -345,25 +345,37 @@ def list_user_maintainers(portdir: str, category: str, address: str, list_atoms:
     return 0
 
 
-def list_orphan_packages(args: argparse.Namespace) -> int:
+def list_orphan_packages(portdir: str, category: str, installed: bool) -> int:
     """
     Lists all found orphan packages.
 
-    :param args: argparse namespace
+    :param portdir: path to portage repository for metadata
+    :type portdir: str
+    :param category: category to restrict search to
+    :type category: str
+    :param installed: whether to list only installed atoms
+    :type installed: bool
+    :returns: exit code
+    :rtype: int
     """
-    assert isinstance(args, argparse.Namespace)
-    for atom in portdb.cp_all(trees=[args.portdir]):
-        if args.category and not is_in_category(atom, args.category):
+    assert isinstance(portdir, str)
+    assert isinstance(installed, bool)
+
+    if category is not None:
+        assert isinstance(category, str)
+
+    for atom in portdb.cp_all(trees=[portdir]):
+        if category and not is_in_category(atom, category):
             continue
 
-        metadata_path = os.path.join(args.portdir, atom, 'metadata.xml')
+        metadata_path = os.path.join(portdir, atom, 'metadata.xml')
         if not os.path.exists(metadata_path):
             print('Error: no metadata.xml found for atom: %r' % atom, file=sys.stderr)
             continue
 
         if is_orphan(metadata_path):
-            if args.installed:
-                if is_installed(atom, args.portdir):
+            if installed:
+                if is_installed(atom, portdir):
                     print(_p_pkg(atom))
             else:
                 print(_p_pkg(atom))
