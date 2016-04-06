@@ -12,7 +12,8 @@ import sys
 import portage
 from portage.output import colorize as colorize
 
-import portage.portdb as portdb
+# TODO: properly create portdb object
+portdb = portage.portdb
 assert isinstance(portdb, portage._LegacyGlobalProxy)
 
 projects_xml = os.path.join(portdb.porttrees[0], 'metadata', 'projects.xml')  # TODO: is this valid?
@@ -83,7 +84,7 @@ def main() -> int:
     elif args.mode == 'orphans':
         return list_orphan_packages(args)
     elif args.mode == 'xml':
-        return print_xml(args)
+        return print_xml(args.portdir, args.commits, args.category, args.address)
     else:
         parser.print_help()
         return -1
@@ -201,20 +202,35 @@ def list_local_packages(infile, portdir: str, address: str, orphans: bool, maint
     return 0
 
 
-def print_xml(args: argparse.Namespace) -> int:
+def print_xml(portdir: str, commits: bool, category: str, address: str) -> int:
     """
     Prints proxy maintainers in a nice XML format.
 
-    :param args: argparse namespace
+    :param portdir: path to portage repository for metadata
+    :type portdir: str
+    :param commits: whether to show commit information
+    :type commits: bool
+    :param category: category to restrict search to
+    :type category: str
+    :param address: specific address to search for
+    :type address: str
+    :returns: exit code
+    :rtype: int
     """
-    assert isinstance(args, argparse.Namespace)
+    assert isinstance(portdir, str)
+    assert isinstance(commits, bool)
 
-    git_dir = os.path.join(args.portdir, '.git')
+    if category is not None:
+        assert isinstance(category, str)
+    if address is not None:
+        assert isinstance(address, str)
+
+    git_dir = os.path.join(portdir, '.git')
     if not os.path.isdir(git_dir):
         print('This functionality only works if --portdir is a git repository.', file=sys.stderr)
         return 1
 
-    maintainers = get_maintainers(args)
+    maintainers = get_maintainers(portdir, category, address)
     maintainer_list = list(maintainers.keys())
     maintainer_list.sort()
 
@@ -229,8 +245,8 @@ def print_xml(args: argparse.Namespace) -> int:
             print('    <name>%s</name>' % name)
         print('    <packages>')
         for atom in maintainers[maintainer][1]:
-            if args.commits:
-                commit = get_last_commit(atom, args.portdir)
+            if commits:
+                commit = get_last_commit(atom, portdir)
                 print('      <package name="%s">' % atom)
                 print('        <lastCommitDate>%s</lastCommitDate>' % commit[0])
                 print('        <lastCommitAuthor>%s</lastCommitAuthor>' % commit[1])
@@ -340,33 +356,46 @@ def list_orphan_packages(args: argparse.Namespace) -> int:
     return 0
 
 
-def get_maintainers(args: argparse.Namespace) -> dict:
+def get_maintainers(portdir: str, category: str, address: str) -> dict:
     """
     Iterates through packages and returns a dict of maintainers with their packages.
 
-    :param args: argparse.Namespace
+    :param portdir: path to portage repository for metadata
+    :type portdir: str
+    :param category: category to restrict search to
+    :type category: str
+    :param address: specific address to search for
+    :type address: str
+    :returns: dictionary of {maintainer: [atom, atom, ...], maintainer: [atom, atom, ...]}
     :rtype: dict
     """
+    assert isinstance(portdir, str)
+
+    if category is not None:
+        assert isinstance(category, str)
+    if address is not None:
+        assert isinstance(address, str)
+
     maintainers = {}
-    for atom in portdb.cp_all(trees=[args.portdir]):
-        if args.category and not is_in_category(atom, args.category):
+    for atom in portdb.cp_all(trees=[portdir]):
+        if category and not is_in_category(atom, category):
             continue
 
-        metadata = os.path.join(args.portdir, atom, 'metadata.xml')
+        metadata = os.path.join(portdir, atom, 'metadata.xml')
         if not os.path.exists(metadata):
             print('Error: no metadata.xml found for atom: %r' % atom, file=sys.stderr)
             continue
 
-        if args.address:
+        if address:
             # allow searching for any address
             xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
             for maintainer in xml.maintainers():
-                if maintainer.email == args.address:
+                if maintainer.email == address:
                     try:
-                        maintainers[args.address]
+                        maintainers[address]
                     except KeyError:
-                        maintainers[args.address] = [maintainer.name, []]
-                    maintainers[args.address][1].append(atom)
+                        maintainers[address] = [maintainer.name, []]
+                    maintainers[address][1].append(atom)
         elif is_proxy_maintained(metadata):
             xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
             for maintainer in xml.maintainers():
