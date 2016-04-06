@@ -12,7 +12,10 @@ import sys
 import portage
 from portage.output import colorize as colorize
 
-projects_xml = os.path.join(portage.portdb.porttrees[0], 'metadata', 'projects.xml')  # TODO: is this valid?
+import portage.portdb as portdb
+assert isinstance(portdb, portage._LegacyGlobalProxy)
+
+projects_xml = os.path.join(portdb.porttrees[0], 'metadata', 'projects.xml')  # TODO: is this valid?
 maintainer_needed_colour = 'red'
 address_colour = 'yellow'
 package_colour = 'green'
@@ -23,7 +26,7 @@ name_colour = 'teal'
 def main() -> int:
     """Entry point."""
     parser = argparse.ArgumentParser()
-    parser.add_argument('-p', '--portdir', help='Portage tree root', default=portage.portdb.porttrees[0], metavar='DIR')
+    parser.add_argument('-p', '--portdir', help='Portage tree root', default=portdb.porttrees[0], metavar='DIR')
     parser.add_argument('-n', '--nocolour', help='Do not colourise output', action='store_true')
 
     subparsers = parser.add_subparsers(help='commands')
@@ -67,14 +70,14 @@ def main() -> int:
 
     try:
         if args.category:
-            if not portage.portdb.categories.__contains__(args.category):
+            if not portdb.categories.__contains__(args.category):
                 print('Error: invalid category specified: %r' % args.category, file=sys.stderr)
                 return -3
     except AttributeError:
         args.category = None
 
     if args.mode == 'local':
-        return list_local_packages(args)
+        return list_local_packages(args.input, args.portdir, args.address, args.orphans, args.maintainer, args.desc)
     elif args.mode == 'users':
         return list_user_maintainers(args)
     elif args.mode == 'orphans':
@@ -86,22 +89,39 @@ def main() -> int:
         return -1
 
 
-def list_local_packages(args: argparse.Namespace) -> int:
+def list_local_packages(infile, portdir: str, address: str, orphans: bool, maintainer: bool, desc: bool) -> int:
     """
     List proxy-maint packages installed on system as identified by input.
 
-    :param args: argparse namespace
+    :param infile: file handle or STDIN stream of package atoms to check
+    :type infile: file
+    :param portdir: path to portage repository for metadata
+    :type portdir: str
+    :param address: specific address to search for
+    :type address: str
+    :param orphans: whether to list only orphaned packages
+    :type orphans: bool
+    :param maintainer: whether to show the maintainer for packages
+    :type maintainer: bool
+    :param desc: whether to show maintainer description
+    :type maintainer: bool
+    :returns: exit status
+    :rtype: int
     """
-    assert isinstance(args, argparse.Namespace)
+    assert isinstance(portdir, str)
+    assert isinstance(address, str)
+    assert isinstance(orphans, bool)
+    assert isinstance(maintainer, bool)
+    assert isinstance(desc, bool)
 
     # don't hang if no input file or pipe
-    if args.input.isatty():
+    if infile.isatty():
         print('ERROR: input file or pipe required for local package lists', file=sys.stderr)
         return 2
 
-    atoms = [line.strip() for line in args.input.readlines()]
+    atoms = [line.strip() for line in infile.readlines()]
     package_list = []
-    available_atoms = portage.portdb.cp_all(trees=[args.portdir])
+    available_atoms = portdb.cp_all(trees=[portdir])
 
     for atom in atoms:
         # assure we're working with only CP not CPV
@@ -111,16 +131,16 @@ def list_local_packages(args: argparse.Namespace) -> int:
         if atom not in available_atoms:
             continue
 
-        metadata = os.path.join(args.portdir, atom, 'metadata.xml')
+        metadata = os.path.join(portdir, atom, 'metadata.xml')
         if not os.path.exists(metadata):
             print('Error: no metadata.xml found for atom: %r' % atom, file=sys.stderr)
             continue
 
-        if args.address:
+        if address:
             xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
             matches_address = False
             for maintainer in xml.maintainers():
-                if maintainer.email == args.address:
+                if maintainer.email == address:
                     matches_address = True
             if not matches_address:
                 # package not associated with specified address
@@ -128,7 +148,7 @@ def list_local_packages(args: argparse.Namespace) -> int:
             del xml
             del matches_address
 
-        if args.orphans:
+        if orphans:
             if atom not in package_list:
                 if is_orphan(metadata):
                     package_list.append(atom)
@@ -139,16 +159,16 @@ def list_local_packages(args: argparse.Namespace) -> int:
 
     package_list.sort()
 
-    if args.orphans:
+    if orphans:
         print('The following packages are orphaned:')
-    elif args.address:
-        print('The following packages are associated with the address %r' % args.address)
+    elif address:
+        print('The following packages are associated with the address %r' % address)
     else:
         print('The following packages are either orphaned or proxy-maintained:')
 
     for atom in package_list:
-        if args.maintainer:
-            metadata = os.path.join(args.portdir, atom, 'metadata.xml')
+        if maintainer:
+            metadata = os.path.join(portdir, atom, 'metadata.xml')
             if not os.path.exists(metadata):
                 print('Error: no metadata.xml found for atom: %r' % atom, file=sys.stderr)
                 continue
@@ -169,7 +189,7 @@ def list_local_packages(args: argparse.Namespace) -> int:
                         if maint.email is not None:
                             output += ' (%s)' % _p_addr(maint.email)
                         print(output)
-                        if args.desc:
+                        if desc:
                             if maint.description is not None:
                                 print('               %s' % maint.description)
                 if len(xml.herds()) != 0:
@@ -301,7 +321,7 @@ def list_orphan_packages(args: argparse.Namespace) -> int:
     :param args: argparse namespace
     """
     assert isinstance(args, argparse.Namespace)
-    for atom in portage.portdb.cp_all(trees=[args.portdir]):
+    for atom in portdb.cp_all(trees=[args.portdir]):
         if args.category and not is_in_category(atom, args.category):
             continue
 
@@ -328,7 +348,7 @@ def get_maintainers(args: argparse.Namespace) -> dict:
     :rtype: dict
     """
     maintainers = {}
-    for atom in portage.portdb.cp_all(trees=[args.portdir]):
+    for atom in portdb.cp_all(trees=[args.portdir]):
         if args.category and not is_in_category(atom, args.category):
             continue
 
@@ -384,7 +404,7 @@ def is_orphan(metadata: str) -> bool:
     return orphaned
 
 
-def is_installed(atom: str, portdir: str=portage.portdb.porttrees[0]) -> bool:
+def is_installed(atom: str, portdir: str=portdb.porttrees[0]) -> bool:
     """
     Determins if package is installed by checking if directory exists in VDB.
 
@@ -397,7 +417,7 @@ def is_installed(atom: str, portdir: str=portage.portdb.porttrees[0]) -> bool:
     # make sure we're only working with a CP and not a CPV
     atom = portage.dep.dep_getkey(atom)
 
-    for cpv in portage.portdb.cp_list(atom, mytree=[portdir]):
+    for cpv in portdb.cp_list(atom, mytree=[portdir]):
         if os.path.exists(os.path.join(portage.const.VDB_PATH, cpv)):
             return True
 
