@@ -194,39 +194,8 @@ def print_xml(args: argparse.Namespace) -> int:
         print('This functionality only works if --portdir is a git repository.', file=sys.stderr)
         return 1
 
-    maintainers = {}
-    for atom in portage.portdb.cp_all(trees=[args.portdir]):
-        if args.category and not is_in_category(atom, args.category):
-            continue
-
-        metadata = os.path.join(args.portdir, atom, 'metadata.xml')
-        if not os.path.exists(metadata):
-            print('Error: no metadata.xml found for atom: %r' % atom, file=sys.stderr)
-            continue
-
-        if args.address:
-            # allow searching for any address
-            xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
-            for maintainer in xml.maintainers():
-                if maintainer.email == args.address:
-                    try:
-                        maintainers[args.address]
-                    except KeyError:
-                        maintainers[args.address] = [maintainer.name, []]
-                    maintainers[args.address][1].append(atom)
-        elif is_proxy_maintained(metadata):
-            xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
-            for maintainer in xml.maintainers():
-                email = maintainer.email
-                if 'gentoo.org' not in email:
-                    try:
-                        maintainers[email]
-                    except KeyError:
-                        maintainers[email] = [maintainer.name, []]
-                    maintainers[email][1].append(atom)
-
+    maintainers = get_maintainers(args)
     maintainer_list = list(maintainers.keys())
-    maintainer_list.sort()
 
     print('<maintainers>')
 
@@ -292,36 +261,8 @@ def list_user_maintainers(args: argparse.Namespace) -> int:
     :param args: argparse namespace
     """
     assert isinstance(args, argparse.Namespace)
-    maintainers = {}
-    for atom in portage.portdb.cp_all(trees=[args.portdir]):
-        if args.category and not is_in_category(atom, args.category):
-            continue
 
-        metadata = os.path.join(args.portdir, atom, 'metadata.xml')
-        if not os.path.exists(metadata):
-            print('Error: no metadata.xml found for atom: %r' % atom, file=sys.stderr)
-            continue
-
-        if args.address:
-            # allow searching for any address
-            xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
-            for maintainer in xml.maintainers():
-                if maintainer.email == args.address:
-                    try:
-                        maintainers[args.address]
-                    except KeyError:
-                        maintainers[args.address] = [maintainer.name, []]
-                    maintainers[args.address][1].append(atom)
-        elif is_proxy_maintained(metadata):
-            xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
-            for maintainer in xml.maintainers():
-                email = maintainer.email
-                if 'gentoo.org' not in email:
-                    try:
-                        maintainers[email]
-                    except KeyError:
-                        maintainers[email] = [maintainer.name, []]
-                    maintainers[email][1].append(atom)
+    maintainers = get_maintainers(args)
 
     if args.address:
         # print only info for given address
@@ -376,6 +317,47 @@ def list_orphan_packages(args: argparse.Namespace) -> int:
                 print(_p_pkg(atom))
 
     return 0
+
+
+def get_maintainers(args: argparse.Namespace) -> dict:
+    """
+    Iterates through packages and returns a dict of maintainers with their packages.
+
+    :param args: argparse.Namespace
+    :rtype: dict
+    """
+    maintainers = {}
+    for atom in portage.portdb.cp_all(trees=[args.portdir]):
+        if args.category and not is_in_category(atom, args.category):
+            continue
+
+        metadata = os.path.join(args.portdir, atom, 'metadata.xml')
+        if not os.path.exists(metadata):
+            print('Error: no metadata.xml found for atom: %r' % atom, file=sys.stderr)
+            continue
+
+        if args.address:
+            # allow searching for any address
+            xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
+            for maintainer in xml.maintainers():
+                if maintainer.email == args.address:
+                    try:
+                        maintainers[args.address]
+                    except KeyError:
+                        maintainers[args.address] = [maintainer.name, []]
+                    maintainers[args.address][1].append(atom)
+        elif is_proxy_maintained(metadata):
+            xml = portage.xml.metadata.MetaDataXML(metadata, projects_xml)
+            for maintainer in xml.maintainers():
+                email = maintainer.email
+                if 'gentoo.org' not in email:
+                    try:
+                        maintainers[email]
+                    except KeyError:
+                        maintainers[email] = [maintainer.name, []]
+                    maintainers[email][1].append(atom)
+
+    return maintainers
 
 
 def is_orphan(metadata: str) -> bool:
