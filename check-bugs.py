@@ -125,9 +125,8 @@ def main():
     args = parser.parse_args()
 
     bugz_output = get_bugz_output()
+    printable_bugs = []
 
-    string = '%6s  %-30s  %-28s  %s'
-    print(string % ('Bug', 'Atom', 'Assignee', 'Maintainers'))
     for bug in bugz_output:
         atom = find_atom(bug.summary)
         if atom is not None:
@@ -142,6 +141,12 @@ def main():
                         print("Skipping atom %s as address not in maintainers" % atom)
                     continue
 
+            printable_bugs.append(tuple([atom, bug, maintainers]))
+
+    if len(printable_bugs) > 0:
+        string = '%6s  %-30s  %-28s  %s'
+        print(string % ('Bug', 'Atom', 'Assignee', 'Maintainers'))
+        for atom, bug, maintainers in printable_bugs:
             print(string % (bug.id, atom, maintainers[0], ', '.join(maintainers[1:])))
             print('  %s' % bug.summary)
             if len(maintainers) > 1:
@@ -149,6 +154,11 @@ def main():
             else:
                 print('  bugz modify -a %s %s' % (maintainers[0], bug.id))
             print()
+    else:
+        if args.address:
+            print("No parseable bugs found for %r" % args.address)
+        else:
+            print("No parseable bugs found")
 
 
 if __name__ == '__main__':
