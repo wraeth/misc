@@ -117,6 +117,13 @@ def get_maintainers(atom: str, portdir: str = '/usr/portage') -> tuple:
 
 
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Util for suggesting assignee/CC for bugs")
+    parser.add_argument('-a', '--address', help="Only show bugs assigned or CC' to ADDRESS", required=False)
+    parser.add_argument('-d', '--debug', help="Print debug output", action='store_true')
+    args = parser.parse_args()
+
     bugz_output = get_bugz_output()
 
     string = '%6s  %-30s  %-28s  %s'
@@ -127,6 +134,14 @@ def main():
             maintainers = get_maintainers(atom)
             if len(maintainers) == 0:
                 maintainers = tuple(['maintainer-needed@gentoo.org', ''])
+
+            # check if address (if supplied) is in maintainers
+            if args.address:
+                if args.address not in maintainers:
+                    if args.debug:
+                        print("Skipping atom %s as address not in maintainers" % atom)
+                    continue
+
             print(string % (bug.id, atom, maintainers[0], ', '.join(maintainers[1:])))
             print('  %s' % bug.summary)
             if len(maintainers) > 1:
