@@ -128,6 +128,12 @@ def main():
             if len(maintainers) == 0:
                 maintainers = tuple(['maintainer-needed@gentoo.org', ''])
             print(string % (bug.id, atom, maintainers[0], ', '.join(maintainers[1:])))
+            print('  %s' % bug.summary)
+            if len(maintainers) > 1:
+                print('  bugz modify -a %s --add-cc %s %s' % (maintainers[0], ' --add-cc '.join(maintainers[1:]), bug.id))
+            else:
+                print('  bugz modify -a %s %s' % (maintainers[0], bug.id))
+            print()
 
 
 if __name__ == '__main__':
