@@ -145,11 +145,13 @@ def main():
             printable_bugs.append(tuple([atom, bug, maintainers]))
 
     if len(printable_bugs) > 0:
+        unmatched = len(bugz_output) - len(printable_bugs)
         string = '%6s  %-30s  %-28s  %s'
         print(string % ('Bug', 'Atom', 'Assignee', 'Maintainers'))
         for atom, bug, maintainers in printable_bugs:
             print(string % (bug.id, atom, maintainers[0], ', '.join(maintainers[1:])))
             print('  %s' % bug.summary)
+            print('  https://bugs.gentoo.org/%s' % bug.id)
             if len(maintainers) > 1:
                 print('  bugz modify -a %s --add-cc %s %s' % (maintainers[0], ' --add-cc '.join(maintainers[1:]), bug.id))
             else:
@@ -160,6 +162,11 @@ def main():
             print("No parseable bugs found for %r" % args.address)
         else:
             print("No parseable bugs found")
+        print()
+
+    if unmatched > 0:
+        print("Note: %d bugs couldn't be parsed" % unmatched)
+        print()
 
 
 if __name__ == '__main__':
