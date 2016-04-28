@@ -26,7 +26,8 @@ def get_bugz_output() -> tuple:
     :returns: pybugz bug list, each bug being a named tuple
     :rtype: tuple
     """
-    output = subprocess.check_output(['bugz', 'search', '-a', 'bug-wranglers@gentoo.org'])
+    cmd = "bugz search -a bug-wranglers@gentoo.org -s CONFIRMED -s IN_PROGRESS -s UNCONFIRMED"
+    output = subprocess.check_output(cmd.split())
 
     bug_list = []
 
