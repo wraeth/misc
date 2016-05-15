@@ -87,6 +87,7 @@ def check_files(directory: str) -> int:
                 line = line.replace('${PN}', PN)
                 line = line.replace('${PV}', PV)
                 line = line.replace('"', '')
+                line = line.replace('.patch)', '.patch')
 
                 print_dbg('%r -> %r' % (org_line, line.strip()))
 
