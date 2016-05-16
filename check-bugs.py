@@ -144,8 +144,8 @@ def main():
 
             printable_bugs.append(tuple([atom, bug, maintainers]))
 
+    unmatched = len(bugz_output) - len(printable_bugs)
     if len(printable_bugs) > 0:
-        unmatched = len(bugz_output) - len(printable_bugs)
         string = '%6s  %-30s  %-28s  %s'
         print(string % ('Bug', 'Atom', 'Assignee', 'Maintainers'))
         for atom, bug, maintainers in printable_bugs:
